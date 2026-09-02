@@ -198,6 +198,6 @@ func NewManager(store Store, selector Selector, hook Hook) *Manager {
 	if errInFlightConfig == nil {
 		manager.ApplyHomeInFlightPublisherConfig(defaultInFlightConfig)
 	}
-	manager.scheduler = newAuthScheduler(selector)
+	manager.scheduler = newAuthScheduler(selector, &manager.runtimeConfig)
 	return manager
 }
