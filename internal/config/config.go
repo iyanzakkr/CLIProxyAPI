@@ -171,4 +171,25 @@ type Config struct {
 
 	// Payload defines default and override rules for provider payload parameters.
 	Payload PayloadConfig `yaml:"payload" json:"payload"`
+
+	// CredentialPools defines named pools of upstream credential IDs per provider.
+	// Each pool name maps to a provider key (e.g. "claude", "codex") and the list of
+	// Auth IDs allowed for that provider within the pool. A provider not listed inside
+	// a pool is left completely unrestricted for any API key resolved to that pool
+	// (used, for example, to keep "gemini" a shared, unfiltered pool).
+	//
+	// This only restricts which upstream credentials a downstream API key may use; it
+	// does not change how credentials are picked among the allowed set -- retry,
+	// round-robin, weighted-round-robin, fill-first, and session affinity all continue
+	// to operate, but only over the credentials the resolved pool allows.
+	CredentialPools map[string]map[string][]string `yaml:"credential-pools,omitempty" json:"credential-pools,omitempty"`
+
+	// APIKeyPools maps a downstream API key (as configured under api-keys) to the
+	// CredentialPools pool name it is restricted to. The special key "*" is the
+	// fallback pool applied to any API key without an explicit entry here.
+	//
+	// CredentialPools and APIKeyPools are both optional and strictly opt-in: when
+	// either is empty (the default), credential selection is completely unrestricted,
+	// identical to today's behavior.
+	APIKeyPools map[string]string `yaml:"api-key-pools,omitempty" json:"api-key-pools,omitempty"`
 }

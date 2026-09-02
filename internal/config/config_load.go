@@ -183,6 +183,10 @@ func LoadConfigOptional(configFile string, optional bool) (*Config, error) {
 	// Normalize global OAuth request-scoped error rules.
 	cfg.SanitizeOAuthRequestScopedErrors()
 
+	// Normalize credential pools and the API key -> pool assignment map.
+	cfg.CredentialPools = NormalizeCredentialPools(cfg.CredentialPools)
+	cfg.APIKeyPools = NormalizeAPIKeyPools(cfg.APIKeyPools)
+
 	// Validate raw payload rules and drop invalid entries.
 	cfg.SanitizePayloadRules()
 

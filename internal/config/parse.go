@@ -107,6 +107,8 @@ func ParseConfigBytes(data []byte) (*Config, error) {
 	cfg.SanitizeOAuthModelAlias()
 	cfg.SanitizeOAuthRequestScopedErrors()
 	cfg.SanitizePayloadRules()
+	cfg.CredentialPools = NormalizeCredentialPools(cfg.CredentialPools)
+	cfg.APIKeyPools = NormalizeAPIKeyPools(cfg.APIKeyPools)
 
 	return &cfg, nil
 }
