@@ -18,6 +18,12 @@ const RequestPathMetadataKey = "request_path"
 // DisallowFreeAuthMetadataKey instructs auth selection to skip known free-tier credentials.
 const DisallowFreeAuthMetadataKey = "disallow_free_auth"
 
+// APIKeyPrincipalMetadataKey stores the downstream API key principal (as authenticated
+// by the access layer, i.e. the gin context "userApiKey" value) in Options.Metadata.
+// Auth selection uses it, together with config CredentialPools/APIKeyPools, to
+// optionally restrict which upstream credentials a downstream API key may use.
+const APIKeyPrincipalMetadataKey = "api_key_principal"
+
 // AuthSelectionModelMetadataKey overrides the model used only for auth selection.
 const AuthSelectionModelMetadataKey = "auth_selection_model"
 
