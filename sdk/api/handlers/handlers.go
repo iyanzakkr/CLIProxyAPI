@@ -196,7 +196,24 @@ func requestExecutionMetadata(ctx context.Context) map[string]any {
 	if disallowFreeAuthFromContext(ctx) {
 		meta[coreexecutor.DisallowFreeAuthMetadataKey] = true
 	}
+	if principal := requestAPIKeyPrincipal(ginCtx); principal != "" {
+		meta[coreexecutor.APIKeyPrincipalMetadataKey] = principal
+	}
 	return meta
+}
+
+// requestAPIKeyPrincipal extracts the authenticated downstream API key principal set by
+// the access middleware, for optional credential-pool routing restrictions. Mirrors
+// requestCallerScope, which reads the same gin context value for a different purpose.
+func requestAPIKeyPrincipal(ginCtx *gin.Context) string {
+	if ginCtx == nil {
+		return ""
+	}
+	value, exists := ginCtx.Get("userApiKey")
+	if !exists || value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
 }
 
 func requestClientIP(request *http.Request) string {
