@@ -6,8 +6,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	internalconfig "github.com/router-for-me/CLIProxyAPI/v7/internal/config"
 	"github.com/router-for-me/CLIProxyAPI/v7/internal/registry"
 	cliproxyexecutor "github.com/router-for-me/CLIProxyAPI/v7/sdk/cliproxy/executor"
 )
@@ -49,6 +51,12 @@ type authScheduler struct {
 	authGenerations     map[string]scheduledGenerationMeta
 	mixedCursors        map[string]int
 	mixedWeightedStates map[string]*smoothWeightedState
+	// runtimeConfig is the Manager's own runtimeConfig field, shared by pointer so the
+	// scheduler's fast-path selection (pickSingle/pickMixed) can apply the same
+	// CredentialPools/APIKeyPools restriction as the legacy path in
+	// conductor_selection.go. Nil in tests that construct a scheduler directly,
+	// which disables the check (matches the pre-credential-pools behavior).
+	runtimeConfig *atomic.Value
 }
 
 // providerScheduler stores auth metadata and model shards for a single provider.
@@ -149,8 +157,11 @@ func restoreReadyViewCursors(view *readyView, state readyViewCursorState) {
 	view.weightedState.weights = weights
 }
 
-// newAuthScheduler constructs an empty scheduler configured for the supplied selector strategy.
-func newAuthScheduler(selector Selector) *authScheduler {
+// newAuthScheduler constructs an empty scheduler configured for the supplied selector
+// strategy. runtimeConfig, when non-nil, is shared by pointer with the owning
+// Manager's own runtimeConfig field so the scheduler can consult the same
+// CredentialPools/APIKeyPools snapshot; pass nil to disable that check.
+func newAuthScheduler(selector Selector, runtimeConfig *atomic.Value) *authScheduler {
 	return &authScheduler{
 		strategy:            selectorStrategy(selector),
 		providers:           make(map[string]*providerScheduler),
@@ -158,7 +169,18 @@ func newAuthScheduler(selector Selector) *authScheduler {
 		authGenerations:     make(map[string]scheduledGenerationMeta),
 		mixedCursors:        make(map[string]int),
 		mixedWeightedStates: make(map[string]*smoothWeightedState),
+		runtimeConfig:       runtimeConfig,
 	}
+}
+
+// currentConfigSnapshot returns the shared runtime config snapshot, or nil when the
+// scheduler was constructed without one (which disables the credential-pool check).
+func (s *authScheduler) currentConfigSnapshot() *internalconfig.Config {
+	if s == nil || s.runtimeConfig == nil {
+		return nil
+	}
+	cfg, _ := s.runtimeConfig.Load().(*internalconfig.Config)
+	return cfg
 }
 
 // selectorStrategy maps a selector implementation to the scheduler semantics it should emulate.
@@ -296,7 +318,7 @@ func (s *authScheduler) pickSingleWithStrategy(ctx context.Context, provider, mo
 	providerKey := strings.ToLower(strings.TrimSpace(provider))
 	modelKey := canonicalModelKey(model)
 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
+	eligibility := authSelectionEligibilityForRequest(ctx, opts, s.currentConfigSnapshot())
 	preferWebsocket := cliproxyexecutor.DownstreamWebsocket(ctx) && providerPrefersWebsocketTransport(providerKey) && pinnedAuthID == ""
 
 	s.mu.Lock()
@@ -355,7 +377,7 @@ func (s *authScheduler) pickMixedWithStrategy(ctx context.Context, providers []s
 		return picked, providerKey, nil
 	}
 	pinnedAuthID := pinnedAuthIDFromMetadata(opts.Metadata)
-	eligibility := authSelectionEligibilityForRequest(ctx, opts)
+	eligibility := authSelectionEligibilityForRequest(ctx, opts, s.currentConfigSnapshot())
 	modelKey := canonicalModelKey(model)
 
 	s.mu.Lock()
